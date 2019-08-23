@@ -24,6 +24,21 @@ public class Rocket : MonoBehaviour {
 		Rotate();
 	}
 
+	private void OnCollisionEnter(Collision collision) {
+		switch (collision.gameObject.tag) {
+			case "Friendly":
+				print("Friendly"); //todo remove
+				break;
+			case "Fuel":
+				print("Fuel"); //todo remove
+				break;
+			default:
+				print("Dead");
+				//Kill the player
+				break;
+		}
+	}
+
 	private void Thrust() {
 		
 		if(Input.GetKey(KeyCode.Space)) { // can thrust while rotating
@@ -57,7 +72,6 @@ public class Rocket : MonoBehaviour {
 		rigidbody.freezeRotation = false;  //resume physics control of rotation
 	}
 
-	
 	IEnumerator VolumeFade(AudioSource _AudioSource, float _EndVolume, float _FadeLength) {
 		float _StartTime = Time.time;
 		while(!soundPlaying && Time.time < _StartTime + _FadeLength) {
