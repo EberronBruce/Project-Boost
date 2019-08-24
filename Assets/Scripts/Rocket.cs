@@ -1,7 +1,6 @@
-﻿using System;
-using System.Collections;
-using System.Collections.Generic;
+﻿using System.Collections;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 public class Rocket : MonoBehaviour {
 	bool soundPlaying = true;
@@ -9,6 +8,9 @@ public class Rocket : MonoBehaviour {
 
 	[SerializeField] float rcsThrust = 100f;
 	[SerializeField] float mainThrust = 100f;
+
+	enum State {  Alive, Dying, Transcending }
+	State state = State.Alive;
 
 	Rigidbody rigidbody;
 	AudioSource audioSource;
@@ -18,25 +20,39 @@ public class Rocket : MonoBehaviour {
 		audioSource = GetComponent<AudioSource>();
 	}
 
-	// Update is called once per frame
+	// Update is called once per frame 
 	void Update() {
-		Thrust();
-		Rotate();
+		// todo somewhere stop sound on death
+		if(state == State.Alive) {
+			Thrust();
+			Rotate();
+		}
 	}
 
 	private void OnCollisionEnter(Collision collision) {
+		if(state != State.Alive) { return; } //ignore collisions
+
 		switch (collision.gameObject.tag) {
 			case "Friendly":
-				print("Friendly"); //todo remove
+				//do nothing
 				break;
-			case "Fuel":
-				print("Fuel"); //todo remove
+			case "Finish":
+				state = State.Transcending;
+				Invoke("LoadNextLevel", 1f); // parameterise time
 				break;
 			default:
-				print("Dead");
-				//Kill the player
+				state = State.Dying;
+				Invoke("LoadFirstLevel", 1f); // paraeterise time
 				break;
 		}
+	}
+
+	private void LoadFirstLevel() {
+		SceneManager.LoadScene(0);
+	}
+
+	private void LoadNextLevel() {
+		SceneManager.LoadScene(1); //todo allow for more than 2 levels
 	}
 
 	private void Thrust() {
