@@ -1,16 +1,28 @@
-﻿using System.Collections;
+﻿using System;
+using UnityEditor;
+using UnityEditor.IMGUI.Controls;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
 public class Rocket : MonoBehaviour {
-	bool soundPlaying = true;
-	float startVolume = 1f;
 
 	[SerializeField] float rcsThrust = 100f;
 	[SerializeField] float mainThrust = 100f;
+	[SerializeField] float levelLoadDelay = 2f;
+
+	[SerializeField] AudioClip mainEngine;
+	[SerializeField] AudioClip success;
+	[SerializeField] AudioClip death;
+
+	[SerializeField] ParticleSystem mainEngineParticles;
+	[SerializeField] ParticleSystem successParticles;
+	[SerializeField] ParticleSystem deathParticles;
+
 
 	enum State {  Alive, Dying, Transcending }
 	State state = State.Alive;
+
+	bool collisionDisabled = false;
 
 	Rigidbody rigidbody;
 	AudioSource audioSource;
@@ -22,29 +34,54 @@ public class Rocket : MonoBehaviour {
 
 	// Update is called once per frame 
 	void Update() {
-		// todo somewhere stop sound on death
 		if(state == State.Alive) {
-			Thrust();
-			Rotate();
+			RespondToThrustInput();
+			RespondToRotateInput();
+		}
+		if (Debug.isDebugBuild) {
+			RespondToDebugKeys();
+		}
+		
+	}
+
+	private void RespondToDebugKeys() {
+		if (Input.GetKeyDown(KeyCode.L)) {
+			LoadNextLevel();
+		} else if (Input.GetKeyDown(KeyCode.C)) {
+			collisionDisabled = !collisionDisabled;
 		}
 	}
 
 	private void OnCollisionEnter(Collision collision) {
-		if(state != State.Alive) { return; } //ignore collisions
+		if(state != State.Alive || collisionDisabled) { return; } 
 
 		switch (collision.gameObject.tag) {
 			case "Friendly":
 				//do nothing
 				break;
 			case "Finish":
-				state = State.Transcending;
-				Invoke("LoadNextLevel", 1f); // parameterise time
+				StartSuccessSequence();
 				break;
 			default:
-				state = State.Dying;
-				Invoke("LoadFirstLevel", 1f); // paraeterise time
+				StartDeathSequence();
 				break;
 		}
+	}
+
+	private void StartSuccessSequence() {
+		state = State.Transcending;
+		audioSource.Stop();
+		audioSource.PlayOneShot(success);
+		successParticles.Play();
+		Invoke("LoadNextLevel", levelLoadDelay); 
+	}
+
+	private void StartDeathSequence() {
+		state = State.Dying;
+		audioSource.Stop();
+		audioSource.PlayOneShot(death);
+		deathParticles.Play();
+		Invoke("LoadFirstLevel", levelLoadDelay); 
 	}
 
 	private void LoadFirstLevel() {
@@ -52,29 +89,35 @@ public class Rocket : MonoBehaviour {
 	}
 
 	private void LoadNextLevel() {
-		SceneManager.LoadScene(1); //todo allow for more than 2 levels
+		int currentSceneIndex = SceneManager.GetActiveScene().buildIndex;
+		int nextSceneIndex = currentSceneIndex + 1;
+		if (nextSceneIndex == SceneManager.sceneCountInBuildSettings) {
+			nextSceneIndex = 0; // loop back to start
+		}
+		SceneManager.LoadScene(nextSceneIndex); //todo allow for more than 2 levels
 	}
 
-	private void Thrust() {
+	private void RespondToThrustInput() { 
 		
 		if(Input.GetKey(KeyCode.Space)) { // can thrust while rotating
 			rigidbody.freezeRotation = true; // take manual control of rotation
-			rigidbody.AddRelativeForce(Vector3.up * mainThrust * Time.deltaTime);
-			if(!soundPlaying) {
-				soundPlaying = true;
-				audioSource.volume = startVolume;
-				audioSource.Play();
-			}
+			ApplyThrust();
 		} else {
 			rigidbody.freezeRotation = false;  //resume physics control of rotation
-			if(soundPlaying) {
-				soundPlaying = false;
-				StartCoroutine(VolumeFade(audioSource, 0f, 0.5f));
-			}
+			audioSource.Stop();
+			mainEngineParticles.Stop();
 		}
 	}
 
-	private void Rotate() {
+	private void ApplyThrust() {
+		rigidbody.AddRelativeForce(Vector3.up * mainThrust * Time.deltaTime);
+		if(!audioSource.isPlaying) {
+			audioSource.PlayOneShot(mainEngine);
+		}
+		mainEngineParticles.Play();
+	}
+
+	private void RespondToRotateInput() {
 		rigidbody.freezeRotation = true; // take manual control of rotation
 
 		float rotationThisFrame = rcsThrust * Time.deltaTime;
@@ -88,20 +131,5 @@ public class Rocket : MonoBehaviour {
 		rigidbody.freezeRotation = false;  //resume physics control of rotation
 	}
 
-	IEnumerator VolumeFade(AudioSource _AudioSource, float _EndVolume, float _FadeLength) {
-		float _StartTime = Time.time;
-		while(!soundPlaying && Time.time < _StartTime + _FadeLength) {
-			float alpha = (_StartTime + _FadeLength - Time.time) / _FadeLength;
-			// use the square here so that we fade faster and without popping
-			alpha = alpha * alpha;
-			_AudioSource.volume = alpha * startVolume + _EndVolume * (1.0f - alpha);
-
-			yield return null;
-
-		}
-
-		if(_EndVolume < 0.1) {
-			_AudioSource.UnPause();
-		}
-	}// end VolumeFade()
+	
 }
